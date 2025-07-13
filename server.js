@@ -16,6 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api/community-signups', require('./routes/communitySignups'));
 
 // Basic route
 app.get('/', (req, res) => {
