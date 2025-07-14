@@ -26,6 +26,29 @@ const eventSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  image: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  capacity: {
+    type: Number,
+    required: false
+  },
+  cost: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  highlights: {
+    type: [String],
+    required: false
+  },
+  specialGift: {
+    type: String,
+    required: false,
+    trim: true
+  },
   action: {
     type: String,
     required: true,
