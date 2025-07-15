@@ -4,6 +4,11 @@ const Event = require('../models/Event');
 const { adminAuth } = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+const uploadDir = path.join(__dirname, '../uploads/events');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Multer storage config for event images
 const storage = multer.diskStorage({
@@ -79,7 +84,7 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
     res.json(event);
   } catch (error) {
     console.error('Create event error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
