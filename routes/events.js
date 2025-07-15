@@ -2,6 +2,22 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Event = require('../models/Event');
 const { adminAuth } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+
+// Multer storage config for event images
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, '../uploads/events'));
+  },
+  filename: function (req, file, cb) {
+    const eventName = req.body.title ? req.body.title.replace(/\s+/g, '_') : 'event';
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    cb(null, `${eventName}_${timestamp}${ext}`);
+  }
+});
+const upload = multer({ storage });
 
 const router = express.Router();
 
@@ -21,33 +37,42 @@ router.get('/', async (req, res) => {
 // @route   POST /api/events
 // @desc    Create new event
 // @access  Private (Admin only)
-router.post('/', [
-  adminAuth,
-  body('date').notEmpty().withMessage('Date is required'),
-  body('title').notEmpty().withMessage('Title is required'),
-  body('time').notEmpty().withMessage('Time is required'),
-  body('location').notEmpty().withMessage('Location is required'),
-  body('desc').notEmpty().withMessage('Description is required'),
-  body('action').notEmpty().withMessage('Action text is required'),
-  body('free').isBoolean().withMessage('Free must be a boolean')
-], async (req, res) => {
+router.post('/', adminAuth, upload.single('image'), async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const {
+      date,
+      title,
+      time,
+      place,
+      cost,
+      capacity,
+      desc,
+      highlights,
+      specialGift,
+      actionType
+    } = req.body;
+
+    // Highlights may come as a JSON string from form-data
+    let highlightsArr = highlights;
+    if (typeof highlights === 'string') {
+      try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
     }
 
-    const { date, title, time, location, desc, action, free } = req.body;
+    // Image filename
+    let imageFilename = req.file ? req.file.filename : '';
 
     const newEvent = new Event({
       date,
       title,
       time,
-      location,
+      place,
+      cost,
+      capacity,
       desc,
-      action,
-      free
-      // createdBy is now optional and not set here
+      image: imageFilename,
+      highlights: highlightsArr,
+      specialGift,
+      actionType
     });
 
     const event = await newEvent.save();

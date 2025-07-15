@@ -16,10 +16,19 @@ const eventSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  location: {
+  place: {
     type: String,
     required: true,
     trim: true
+  },
+  cost: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  capacity: {
+    type: Number,
+    required: false
   },
   desc: {
     type: String,
@@ -27,16 +36,7 @@ const eventSchema = new mongoose.Schema({
     trim: true
   },
   image: {
-    type: String,
-    required: false,
-    trim: true
-  },
-  capacity: {
-    type: Number,
-    required: false
-  },
-  cost: {
-    type: String,
+    type: String, // filename only
     required: false,
     trim: true
   },
@@ -53,10 +53,6 @@ const eventSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true
-  },
-  free: {
-    type: Boolean,
-    default: false
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
