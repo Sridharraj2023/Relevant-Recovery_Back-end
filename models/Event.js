@@ -49,7 +49,7 @@ const eventSchema = new mongoose.Schema({
     required: false,
     trim: true
   },
-  action: {
+  actionType: {
     type: String,
     required: true,
     trim: true

@@ -96,10 +96,9 @@ router.put('/:id', [
   body('date').notEmpty().withMessage('Date is required'),
   body('title').notEmpty().withMessage('Title is required'),
   body('time').notEmpty().withMessage('Time is required'),
-  body('location').notEmpty().withMessage('Location is required'),
+  body('place').notEmpty().withMessage('Place is required'),
   body('desc').notEmpty().withMessage('Description is required'),
-  body('action').notEmpty().withMessage('Action text is required'),
-  body('free').isBoolean().withMessage('Free must be a boolean')
+  body('actionType').notEmpty().withMessage('Action type is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -107,7 +106,7 @@ router.put('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { date, title, time, location, desc, action, free } = req.body;
+    const { date, title, time, place, desc, actionType, cost, capacity, image, highlights, specialGift } = req.body;
 
     let event = await Event.findById(req.params.id);
     if (!event) {
@@ -116,7 +115,7 @@ router.put('/:id', [
 
     event = await Event.findByIdAndUpdate(
       req.params.id,
-      { date, title, time, location, desc, action, free },
+      { date, title, time, place, desc, actionType, cost, capacity, image, highlights, specialGift },
       { new: true }
     );
 
