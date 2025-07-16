@@ -91,38 +91,67 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
 // @route   PUT /api/events/:id
 // @desc    Update event
 // @access  Private (Admin only)
-router.put('/:id', [
-  adminAuth,
-  body('date').notEmpty().withMessage('Date is required'),
-  body('title').notEmpty().withMessage('Title is required'),
-  body('time').notEmpty().withMessage('Time is required'),
-  body('place').notEmpty().withMessage('Place is required'),
-  body('desc').notEmpty().withMessage('Description is required'),
-  body('actionType').notEmpty().withMessage('Action type is required')
-], async (req, res) => {
+router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+    const {
+      date,
+      title,
+      time,
+      place,
+      desc,
+      actionType,
+      cost,
+      capacity,
+      highlights,
+      specialGift
+    } = req.body;
 
-    const { date, title, time, place, desc, actionType, cost, capacity, image, highlights, specialGift } = req.body;
+    // Validation (manual, since express-validator is not used here)
+    if (!date || !title || !time || !place || !desc || !actionType) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
 
     let event = await Event.findById(req.params.id);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    event = await Event.findByIdAndUpdate(
-      req.params.id,
-      { date, title, time, place, desc, actionType, cost, capacity, image, highlights, specialGift },
-      { new: true }
-    );
+    // Handle highlights (may come as JSON string)
+    let highlightsArr = highlights;
+    if (typeof highlights === 'string') {
+      try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
+    }
 
+    // Handle image update
+    let imageFilename = event.image; // default to existing image
+    if (req.file) {
+      // Optionally delete old image file
+      if (event.image) {
+        const oldImagePath = path.join(__dirname, '../uploads/events', event.image);
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath);
+        }
+      }
+      imageFilename = req.file.filename;
+    }
+
+    event.date = date;
+    event.title = title;
+    event.time = time;
+    event.place = place;
+    event.desc = desc;
+    event.actionType = actionType;
+    event.cost = cost;
+    event.capacity = capacity;
+    event.highlights = highlightsArr;
+    event.specialGift = specialGift;
+    event.image = imageFilename;
+
+    await event.save();
     res.json(event);
   } catch (error) {
     console.error('Update event error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
