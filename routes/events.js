@@ -16,7 +16,10 @@ const storage = multer.diskStorage({
     cb(null, path.join(__dirname, '../uploads/events'));
   },
   filename: function (req, file, cb) {
-    const eventName = req.body.title ? req.body.title.replace(/\s+/g, '_') : 'event';
+    // Sanitize event title for filename
+    const eventName = req.body.title
+      ? req.body.title.replace(/[^a-zA-Z0-9_-]/g, '_')
+      : 'event';
     const timestamp = Date.now();
     const ext = path.extname(file.originalname);
     cb(null, `${eventName}_${timestamp}${ext}`);
