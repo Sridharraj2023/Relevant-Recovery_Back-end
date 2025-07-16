@@ -3,9 +3,16 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDb = require('./config/db');
 const path = require('path');
+const fs = require('fs');
 
 // Load environment variables
 dotenv.config();
+
+// Ensure uploads/events directory exists
+const uploadDir = path.join(__dirname, 'uploads/events');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 const app = express();
 
