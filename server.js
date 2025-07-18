@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const connectDb = require('./config/db');
 const path = require('path');
 const fs = require('fs');
+const donations = require('./routes/donations');
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +27,7 @@ app.use('/uploads/events', express.static(path.join(__dirname, 'uploads/events')
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/community-signups', require('./routes/communitySignups'));
+app.use('/api/donations', donations);
 
 // Basic route
 app.get('/', (req, res) => {
