@@ -57,7 +57,8 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       desc,
       highlights,
       specialGift,
-      actionType
+      actionType,
+      free
     } = req.body;
 
     // Highlights may come as a JSON string from form-data
@@ -80,7 +81,8 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       image: imageFilename,
       highlights: highlightsArr,
       specialGift,
-      actionType
+      actionType,
+      free: free === 'true' || free === true
     });
 
     const event = await newEvent.save();
@@ -106,7 +108,8 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
       cost,
       capacity,
       highlights,
-      specialGift
+      specialGift,
+      free
     } = req.body;
 
     // Validation (manual, since express-validator is not used here)
@@ -149,6 +152,7 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
     event.highlights = highlightsArr;
     event.specialGift = specialGift;
     event.image = imageFilename;
+    event.free = free === 'true' || free === true;
 
     await event.save();
     res.json(event);
