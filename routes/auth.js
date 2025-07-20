@@ -28,10 +28,7 @@ router.post('/login', [
 
     // Debug logs
     console.log('Login attempt:', { email, password });
-    console.log('Environment variables:', { 
-      ADMIN_EMAIL: process.env.ADMIN_EMAIL, 
-      ADMIN_PASSWORD: process.env.ADMIN_PASSWORD 
-    });
+    console.log('Admin creds:', adminCreds);
 
     // Check if credentials match environment variables
     if (email !== adminCreds.email || password !== adminCreds.password) {
