@@ -9,23 +9,19 @@ const uploadDir = path.join(__dirname, '../uploads/events');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
+const cloudinary = require('cloudinary').v2;
+const streamifier = require('streamifier');
 
-// Multer storage config for event images
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../uploads/events'));
-  },
-  filename: function (req, file, cb) {
-    // Sanitize event title for filename
-    const eventName = req.body.title
-      ? req.body.title.replace(/[^a-zA-Z0-9_-]/g, '_')
-      : 'event';
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `${eventName}_${timestamp}${ext}`);
-  }
+// Cloudinary config (use environment variables for credentials)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
-const upload = multer({ storage });
+
+// Multer config for memory storage (so we can upload to Cloudinary)
+const multerStorage = multer.memoryStorage();
+const upload = multer({ storage: multerStorage });
 
 const router = express.Router();
 
@@ -67,8 +63,24 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
     }
 
-    // Image filename
-    let imageFilename = req.file ? req.file.filename : '';
+    // Upload image to Cloudinary if present
+    let imageUrl = '';
+    if (req.file) {
+      const eventName = title ? title.replace(/[^a-zA-Z0-9_-]/g, '_') : 'event';
+      const timestamp = Date.now();
+      const publicId = `events/${eventName}_${timestamp}`;
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { public_id: publicId, folder: 'events' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+      });
+      imageUrl = uploadResult.secure_url;
+    }
 
     const newEvent = new Event({
       date,
@@ -78,7 +90,7 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       cost,
       capacity,
       desc,
-      image: imageFilename,
+      image: imageUrl,
       highlights: highlightsArr,
       specialGift,
       actionType,
@@ -128,17 +140,23 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
       try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
     }
 
-    // Handle image update
-    let imageFilename = event.image; // default to existing image
+    // Upload new image to Cloudinary if present
+    let imageUrl = event.image; // default to existing image
     if (req.file) {
-      // Optionally delete old image file
-      if (event.image) {
-        const oldImagePath = path.join(__dirname, '../uploads/events', event.image);
-        if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath);
-        }
-      }
-      imageFilename = req.file.filename;
+      const eventName = title ? title.replace(/[^a-zA-Z0-9_-]/g, '_') : 'event';
+      const timestamp = Date.now();
+      const publicId = `events/${eventName}_${timestamp}`;
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { public_id: publicId, folder: 'events' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+      });
+      imageUrl = uploadResult.secure_url;
     }
 
     event.date = date;
@@ -151,7 +169,7 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
     event.capacity = capacity;
     event.highlights = highlightsArr;
     event.specialGift = specialGift;
-    event.image = imageFilename;
+    event.image = imageUrl;
     event.free = free === 'true' || free === true;
 
     await event.save();

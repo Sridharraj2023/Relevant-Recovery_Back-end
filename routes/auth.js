@@ -1,6 +1,13 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const fs = require('fs');
+const path = require('path');
+const adminCredPath = path.join(__dirname, '../adminCredentials.json');
+let adminCreds = { email: '', password: '' };
+if (fs.existsSync(adminCredPath)) {
+  adminCreds = JSON.parse(fs.readFileSync(adminCredPath, 'utf8'));
+}
 
 const router = express.Router();
 
@@ -27,10 +34,10 @@ router.post('/login', [
     });
 
     // Check if credentials match environment variables
-    if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) {
+    if (email !== adminCreds.email || password !== adminCreds.password) {
       console.log('Credentials mismatch:', {
-        emailMatch: email === process.env.ADMIN_EMAIL,
-        passwordMatch: password === process.env.ADMIN_PASSWORD
+        emailMatch: email === adminCreds.email,
+        passwordMatch: password === adminCreds.password
       });
       return res.status(400).json({ message: 'Invalid credentials' });
     }
@@ -70,7 +77,7 @@ router.get('/me', async (req, res) => {
     res.json({
       id: 'admin',
       name: 'Admin',
-      email: process.env.ADMIN_EMAIL,
+      email: adminCreds.email,
       role: 'admin'
     });
   } catch (error) {

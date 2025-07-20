@@ -2,60 +2,32 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-function createAdminEnv() {
+const adminCredPath = path.join(__dirname, 'adminCredentials.json');
+
+function createAdminCredentials() {
   try {
-    const envPath = path.join(__dirname, '.env');
-    
-    // Check if .env already exists
-    if (fs.existsSync(envPath)) {
-      const existingContent = fs.readFileSync(envPath, 'utf8');
-      
-      // Check if admin credentials already exist
-      if (existingContent.includes('ADMIN_EMAIL=') && existingContent.includes('ADMIN_PASSWORD=')) {
-        console.log('.env file already exists with admin credentials');
-        console.log('Admin credentials:');
-        console.log('Email: admin@example.com');
-        console.log('Password: admin123');
-        process.exit(0);
-      }
-      
-      // Add missing admin credentials to existing .env file
-      const adminCredentials = `
-# Admin Credentials
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=admin123`;
-      
-      fs.appendFileSync(envPath, adminCredentials);
-      console.log('Admin credentials added to existing .env file');
-      console.log('Admin credentials:');
-      console.log('Email: admin@example.com');
-      console.log('Password: admin123');
+    // Check if adminCredentials.json already exists
+    if (fs.existsSync(adminCredPath)) {
+      const creds = JSON.parse(fs.readFileSync(adminCredPath, 'utf8'));
+      console.log('Admin credentials already exist:');
+      console.log('Email:', creds.email);
+      console.log('Password:', creds.password);
       process.exit(0);
     }
-
-    // Create new .env file with admin credentials
-    const envContent = `# Admin Credentials
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=admin123
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-MONGO_URI=mongodb://localhost:27017/relevant-recovery
-PORT=5000
-
-# Event Management
-NODE_ENV=development`;
-
-    fs.writeFileSync(envPath, envContent);
-    
-    console.log('Admin environment setup completed successfully!');
-    console.log('Admin credentials:');
-    console.log('Email: admin@example.com');
-    console.log('Password: admin123');
-    console.log('.env file created with admin credentials');
+    // Create new admin credentials file
+    const creds = {
+      email: 'admin@example.com',
+      password: 'admin123'
+    };
+    fs.writeFileSync(adminCredPath, JSON.stringify(creds, null, 2));
+    console.log('Admin credentials created:');
+    console.log('Email:', creds.email);
+    console.log('Password:', creds.password);
     process.exit(0);
   } catch (err) {
-    console.error('Error creating admin environment:', err.message);
+    console.error('Error creating admin credentials:', err.message);
     process.exit(1);
   }
 }
 
-createAdminEnv(); 
+createAdminCredentials(); 
