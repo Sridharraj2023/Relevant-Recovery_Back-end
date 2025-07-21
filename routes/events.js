@@ -19,8 +19,18 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Multer config for memory storage (so we can upload to Cloudinary)
-const multerStorage = multer.memoryStorage();
+// Multer config for disk storage (save to uploads/events)
+const multerStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const eventName = req.body.title ? req.body.title.replace(/[^a-zA-Z0-9_-]/g, '_') : 'event';
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    cb(null, `${eventName}_${timestamp}${ext}`);
+  }
+});
 const upload = multer({ storage: multerStorage });
 
 const router = express.Router();
@@ -63,23 +73,10 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
     }
 
-    // Upload image to Cloudinary if present
+    // Save image locally if present
     let imageUrl = '';
     if (req.file) {
-      const eventName = title ? title.replace(/[^a-zA-Z0-9_-]/g, '_') : 'event';
-      const timestamp = Date.now();
-      const publicId = `events/${eventName}_${timestamp}`;
-      const uploadResult = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          { public_id: publicId, folder: 'events' },
-          (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
-          }
-        );
-        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
-      });
-      imageUrl = uploadResult.secure_url;
+      imageUrl = `/uploads/events/${req.file.filename}`;
     }
 
     const newEvent = new Event({
@@ -140,23 +137,10 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
       try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
     }
 
-    // Upload new image to Cloudinary if present
+    // Save new image locally if present
     let imageUrl = event.image; // default to existing image
     if (req.file) {
-      const eventName = title ? title.replace(/[^a-zA-Z0-9_-]/g, '_') : 'event';
-      const timestamp = Date.now();
-      const publicId = `events/${eventName}_${timestamp}`;
-      const uploadResult = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          { public_id: publicId, folder: 'events' },
-          (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
-          }
-        );
-        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
-      });
-      imageUrl = uploadResult.secure_url;
+      imageUrl = `/uploads/events/${req.file.filename}`;
     }
 
     event.date = date;
