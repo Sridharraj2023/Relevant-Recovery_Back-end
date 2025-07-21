@@ -76,7 +76,8 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
     // Save image locally if present
     let imageUrl = '';
     if (req.file) {
-      imageUrl = `/uploads/events/${req.file.filename}`;
+      const baseUrl = req.protocol + '://' + req.get('host');
+      imageUrl = `${baseUrl}/uploads/events/${req.file.filename}`;
     }
 
     const newEvent = new Event({
@@ -140,7 +141,8 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
     // Save new image locally if present
     let imageUrl = event.image; // default to existing image
     if (req.file) {
-      imageUrl = `/uploads/events/${req.file.filename}`;
+      const baseUrl = req.protocol + '://' + req.get('host');
+      imageUrl = `${baseUrl}/uploads/events/${req.file.filename}`;
     }
 
     event.date = date;
