@@ -54,11 +54,6 @@ const eventSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  free: {
-    type: Boolean,
-    required: false,
-    default: false
-  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
