@@ -28,6 +28,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/community-signups', require('./routes/communitySignups'));
 app.use('/api/donations', donations);
+app.use('/api/donation-options', require('./routes/donationOptions'));
 
 // Basic route
 app.get('/', (req, res) => {
