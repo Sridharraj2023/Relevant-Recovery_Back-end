@@ -29,7 +29,7 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/community-signups', require('./routes/communitySignups'));
 app.use('/api/donations', donations);
 app.use('/api/donation-options', require('./routes/donationOptions'));
-
+app.use('/api/contact', require('./routes/contact'));
 // Basic route
 app.get('/', (req, res) => {
   res.json({ message: 'Relevant Recovery API is running' });
