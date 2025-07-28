@@ -20,6 +20,7 @@ router.post('/', async (req, res) => {
         amount: Math.round(Number(amount) * 100), // Stripe expects cents
         currency: 'usd',
         receipt_email: email,
+        description: `Donation from ${firstName} ${lastName}${org ? ' (' + org + ')' : ''}`,
         metadata: {
           firstName, lastName, org, title, address, city, state, zip, phone, emailWork, volunteer, familyServices
         }
