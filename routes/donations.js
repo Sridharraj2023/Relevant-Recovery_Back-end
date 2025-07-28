@@ -17,14 +17,24 @@ router.post('/', async (req, res) => {
     if (paymentMethod === 'stripe') {
       // Create Stripe PaymentIntent
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(Number(amount) * 100), // Stripe expects cents
-        currency: 'usd',
-        receipt_email: email,
-        description: `Donation from ${firstName} ${lastName}${org ? ' (' + org + ')' : ''}`,
-        metadata: {
-          firstName, lastName, org, title, address, city, state, zip, phone, emailWork, volunteer, familyServices
-        }
-      });
+  amount: Math.round(Number(amount) * 100), // Stripe expects cents
+  currency: 'usd',
+  receipt_email: email,
+  description: `Donation from ${firstName} ${lastName}${org ? ' (' + org + ')' : ''}`,
+  shipping: {
+    name: `${firstName} ${lastName}`,
+    address: {
+      line1: address,
+      city: city,
+      state: state,
+      postal_code: zip,
+      country: country || 'US', // Use user's country, default to US
+    },
+  },
+  metadata: {
+    firstName, lastName, org, title, address, city, state, zip, country: country || 'US', phone, emailWork, volunteer, familyServices
+  }
+});
       stripePaymentIntentId = paymentIntent.id;
       clientSecret = paymentIntent.client_secret;
     }
