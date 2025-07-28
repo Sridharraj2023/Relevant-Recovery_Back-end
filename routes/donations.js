@@ -7,7 +7,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 router.post('/', async (req, res) => {
   try {
     const {
-      firstName, lastName, org, title, address, city, state, zip, phone, email, emailWork,
+      firstName, lastName, org, title, address, city, state, zip, country, phone, email, emailWork,
       volunteer, familyServices, amount, paymentMethod
     } = req.body;
 
