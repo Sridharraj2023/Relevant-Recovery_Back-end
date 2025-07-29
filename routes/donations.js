@@ -1,7 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const Donation = require('../models/Donation');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripeOptions = {};
+if (process.env.STRIPE_API_BASE_URL) {
+  // Only for local stripe-mock
+  const url = new URL(process.env.STRIPE_API_BASE_URL);
+  stripeOptions.host = url.hostname;
+  stripeOptions.port = Number(url.port);
+  stripeOptions.protocol = url.protocol.replace(':', '');
+}
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, stripeOptions);
 
 // POST /api/donations
 router.post('/', async (req, res) => {

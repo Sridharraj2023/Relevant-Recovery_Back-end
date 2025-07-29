@@ -1,3 +1,5 @@
+// Load environment variables
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -6,8 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const donations = require('./routes/donations');
 
-// Load environment variables
-dotenv.config();
+
 
 // Ensure uploads/events directory exists
 const uploadDir = path.join(__dirname, 'uploads/events');
