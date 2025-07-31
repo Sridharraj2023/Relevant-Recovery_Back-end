@@ -41,30 +41,42 @@ router.post('/', async (req, res) => {
 
     let stripePaymentIntentId = null;
     let clientSecret = null;
+    let paymentIntentStatus = null;
+    let paymentIntent = null;
 
     if (paymentMethod === 'stripe') {
-      // Create Stripe PaymentIntent
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(Number(amount) * 100), // Stripe expects cents
-        currency: 'usd',
-        receipt_email: email,
-        description: `Donation from ${firstName} ${lastName}${org ? ' (' + org + ')' : ''}`,
-        shipping: {
-          name: `${firstName} ${lastName}`,
-          address: {
-            line1: address,
-            city: city,
-            state: state,
-            postal_code: zip,
-            country: country || 'US', // Use user's country, default to US
+      try {
+        // Create Stripe PaymentIntent
+        paymentIntent = await stripe.paymentIntents.create({
+          amount: Math.round(Number(amount) * 100), // Stripe expects cents
+          currency: 'usd',
+          receipt_email: email,
+          description: `Donation from ${firstName} ${lastName}${org ? ' (' + org + ')' : ''}`,
+          shipping: {
+            name: `${firstName} ${lastName}`,
+            address: {
+              line1: address,
+              city: city,
+              state: state,
+              postal_code: zip,
+              country: country || 'US',
+            },
           },
-        },
-        metadata: {
-          firstName, lastName, org, title, address, city, state, zip, country: country || 'US', phone, emailWork, volunteer, familyServices
-        }
-      });
-      stripePaymentIntentId = paymentIntent.id;
-      clientSecret = paymentIntent.client_secret;
+          metadata: {
+            firstName, lastName, org, title, address, city, state, zip, country: country || 'US', phone, emailWork, volunteer, familyServices
+          }
+        });
+        
+        stripePaymentIntentId = paymentIntent.id;
+        clientSecret = paymentIntent.client_secret;
+        paymentIntentStatus = paymentIntent.status;
+      } catch (stripeError) {
+        console.error('Stripe PaymentIntent creation failed:', stripeError);
+        return res.status(500).json({ 
+          error: 'Payment processing failed',
+          details: stripeError.message 
+        });
+      }
     }
 
     try {
@@ -100,10 +112,10 @@ router.post('/', async (req, res) => {
         amount: Number(amount),
         currency: 'usd',
         paymentMethod,
-        paymentStatus: 'requires_payment_method',
-        stripePaymentIntentId: paymentIntent?.id,
+        paymentStatus: paymentIntentStatus || 'requires_payment_method',
+        stripePaymentIntentId: stripePaymentIntentId,
         stripeCustomerId: customer.id,
-        status: 'pending',
+        status: paymentIntentStatus || 'pending',
         metadata: {
           source: 'website',
           campaign: 'general',
@@ -117,10 +129,10 @@ router.post('/', async (req, res) => {
       res.status(200).json({
         success: true,
         message: 'Payment intent created successfully',
-        clientSecret: paymentIntent?.client_secret,
+        clientSecret: clientSecret,
         donationId: donation._id,
-        requiresAction: paymentIntent?.status === 'requires_action',
-        paymentIntentStatus: paymentIntent?.status
+        requiresAction: paymentIntentStatus === 'requires_action',
+        paymentIntentStatus: paymentIntentStatus
       });
     } catch (err) {
       console.error(err);
