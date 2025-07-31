@@ -41,7 +41,27 @@ router.post('/', async (req, res) => {
 
     let stripePaymentIntentId = null;
     let clientSecret = null;
-    let paymentIntentStatus = null;
+    let paymentIntentStatus = 'pending'; // Default status
+    
+    // Map Stripe status to our model's status
+    const mapStripeStatus = (stripeStatus) => {
+      switch(stripeStatus) {
+        case 'requires_payment_method':
+        case 'requires_confirmation':
+        case 'requires_action':
+          return 'pending';
+        case 'processing':
+          return 'processing';
+        case 'succeeded':
+          return 'completed';
+        case 'canceled':
+          return 'cancelled';
+        case 'failed':
+          return 'failed';
+        default:
+          return 'pending';
+      }
+    };
     let paymentIntent = null;
 
     if (paymentMethod === 'stripe') {
@@ -69,7 +89,7 @@ router.post('/', async (req, res) => {
         
         stripePaymentIntentId = paymentIntent.id;
         clientSecret = paymentIntent.client_secret;
-        paymentIntentStatus = paymentIntent.status;
+        paymentIntentStatus = mapStripeStatus(paymentIntent.status);
       } catch (stripeError) {
         console.error('Stripe PaymentIntent creation failed:', stripeError);
         return res.status(500).json({ 
