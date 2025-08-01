@@ -7,8 +7,8 @@ const connectDb = require('./config/db');
 const path = require('path');
 const fs = require('fs');
 const donations = require('./routes/donations');
-
-
+const eventTicketBooking = require('./routes/eventticketbooking');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Ensure uploads/events directory exists
 const uploadDir = path.join(__dirname, 'uploads/events');
@@ -32,6 +32,14 @@ app.use('/api/donations', donations);
 app.use('/api/donation-options', require('./routes/donationOptions'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/registration', require('./routes/registration'));
+app.use('/api/event-ticket-booking', eventTicketBooking);
+
+// Stripe webhook handler (needs to be before bodyParser)
+app.post('/api/webhook', express.raw({type: 'application/json'}), (req, res) => {
+  // This will be handled by the event ticket booking router
+  eventTicketBooking.handleStripeWebhook(req, res);
+});
+
 // Basic route
 app.get('/', (req, res) => {
   res.json({ message: 'Relevant Recovery API is running' });
