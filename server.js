@@ -34,12 +34,6 @@ app.use('/api/contact', require('./routes/contact'));
 app.use('/api/registration', require('./routes/registration'));
 app.use('/api/event-ticket-booking', eventTicketBooking);
 
-// Stripe webhook handler (needs to be before bodyParser)
-app.post('/api/webhook', express.raw({type: 'application/json'}), (req, res) => {
-  // This will be handled by the event ticket booking router
-  eventTicketBooking.handleStripeWebhook(req, res);
-});
-
 // Basic route
 app.get('/', (req, res) => {
   res.json({ message: 'Relevant Recovery API is running' });

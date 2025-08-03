@@ -1,188 +1,220 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { check, validationResult } = require('express-validator');
-const auth = require('../middleware/auth');
+const { auth, adminAuth } = require('../middleware/auth');
 const Event = require('../models/Event');
-const EventTicketBooking = require('../models/EventTicketBooking');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const Ticket = require('../models/EventTicketBooking');
+
+// Check if Stripe is configured
+let stripe;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+} else {
+  console.warn('STRIPE_SECRET_KEY not found. Payment processing will be disabled.');
+}
 
 // @route   POST /api/event-ticket-booking
 // @desc    Create a new ticket reservation
 // @access  Public
-router.post(
-  '/',
-  [
-    // Event validation
-    check('eventId', 'Event ID is required').notEmpty().isMongoId().withMessage('Invalid event ID format'),
+router.post('/', async (req, res) => {
+  try {
+    console.log('Received booking request:', req.body);
     
-    // Customer validation
-    check('customer.name', 'Full name is required')
-      .notEmpty()
-      .trim()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Name must be between 2 and 100 characters'),
-      
-    check('customer.email', 'Please include a valid email')
-      .isEmail()
-      .normalizeEmail()
-      .isLength({ max: 100 })
-      .withMessage('Email must be less than 100 characters'),
-      
-    check('customer.phone', 'Phone number is required')
-      .notEmpty()
-      .trim()
-      .isMobilePhone()
-      .withMessage('Please provide a valid phone number'),
-      
-    check('customer.city', 'City is required')
-      .notEmpty()
-      .trim()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('City must be between 2 and 100 characters'),
-      
-    check('customer.state', 'State/Province is required')
-      .notEmpty()
-      .trim()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('State must be between 2 and 100 characters'),
-      
-    check('customer.country', 'Country is required')
-      .notEmpty()
-      .trim()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Country must be between 2 and 100 characters'),
-      
-    // Ticket quantity validation
-    check('quantity', 'Number of tickets is required')
-      .notEmpty()
-      .isInt({ min: 1, max: 10 })
-      .withMessage('You can book between 1 and 10 tickets at a time')
-  ],
-  async (req, res) => {
-    // Format validation errors for consistent response
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const formattedErrors = {};
-      errors.array().forEach(error => {
-        // Format field names to match frontend expectations (e.g., customer.name -> customerName)
-        const field = error.param.includes('.') 
-          ? error.param.split('.').join('_')
-          : error.param;
-          
-        formattedErrors[field] = error.msg;
-      });
-      
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: formattedErrors
-      });
+    const { eventId, customer, quantity, metadata } = req.body;
+
+    // Comprehensive validation
+    const errors = {};
+
+    // Event ID validation
+    if (!eventId) {
+      errors.eventId = 'Event ID is required';
+    } else if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      errors.eventId = 'Invalid event ID format';
     }
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const { eventId, customer, quantity, metadata } = req.body;
-
-      // 1. Find the event and check availability
-      const event = await Event.findById(eventId).session(session);
-      if (!event) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(404).json({ 
-          success: false,
-          message: 'Event not found',
-          error: 'The requested event could not be found.'
-        });
+    // Customer validation
+    if (!customer) {
+      errors.customer = 'Customer information is required';
+    } else {
+      // Name validation
+      if (!customer.name || customer.name.trim().length === 0) {
+        errors.customerName = 'Full name is required';
+      } else if (customer.name.trim().length < 2) {
+        errors.customerName = 'Name must be at least 2 characters long';
+      } else if (customer.name.trim().length > 100) {
+        errors.customerName = 'Name must be less than 100 characters';
       }
 
-      // 2. Check if event has available tickets
-      if (event.capacity) {
-        const ticketsSold = await EventTicketBooking.countDocuments({ 
-          event: eventId, 
-          status: { $in: ['reserved', 'confirmed'] } 
-        }).session(session);
-
-        const availableTickets = event.capacity - ticketsSold;
-        
-        if (quantity > availableTickets) {
-          await session.abortTransaction();
-          session.endSession();
-          return res.status(400).json({ 
-            success: false,
-            message: 'Insufficient tickets',
-            error: `Only ${availableTickets} ticket${availableTickets !== 1 ? 's' : ''} available`,
-            availableTickets,
-            requestedTickets: quantity
-          });
+      // Email validation
+      if (!customer.email || customer.email.trim().length === 0) {
+        errors.customerEmail = 'Email address is required';
+      } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(customer.email.trim())) {
+          errors.customerEmail = 'Please enter a valid email address';
         }
       }
 
-      // 3. Calculate ticket price (in smallest currency unit)
-      const unitPrice = event.price; // Already in cents
-      const totalAmount = unitPrice * quantity;
+      // Phone validation
+      if (!customer.phone || customer.phone.trim().length === 0) {
+        errors.customerPhone = 'Phone number is required';
+      } else {
+        const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+        const cleanPhone = customer.phone.replace(/[\s\-\(\)]/g, '');
+        if (!phoneRegex.test(cleanPhone)) {
+          errors.customerPhone = 'Please enter a valid phone number';
+        }
+      }
 
-      // 4. Create ticket reservation
-      const ticket = new EventTicketBooking({
-        event: eventId,
-        customer: {
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone,
-          address: {
-            city: customer.city,
-            state: customer.state,
-            country: customer.country
-          }
-        },
-        quantity,
-        unitPrice,
-        totalAmount,
-        currency: event.currency || 'usd',
-        status: 'reserved',
-        metadata
+      // City validation
+      if (!customer.city || customer.city.trim().length === 0) {
+        errors.customerCity = 'City is required';
+      } else if (customer.city.trim().length < 2) {
+        errors.customerCity = 'City must be at least 2 characters long';
+      } else if (customer.city.trim().length > 100) {
+        errors.customerCity = 'City must be less than 100 characters';
+      }
+
+      // State validation
+      if (!customer.state || customer.state.trim().length === 0) {
+        errors.customerState = 'State/Province is required';
+      } else if (customer.state.trim().length < 2) {
+        errors.customerState = 'State must be at least 2 characters long';
+      } else if (customer.state.trim().length > 100) {
+        errors.customerState = 'State must be less than 100 characters';
+      }
+
+      // Country validation
+      if (!customer.country || customer.country.trim().length === 0) {
+        errors.customerCountry = 'Country is required';
+      } else if (customer.country.trim().length < 2) {
+        errors.customerCountry = 'Country must be at least 2 characters long';
+      } else if (customer.country.trim().length > 100) {
+        errors.customerCountry = 'Country must be less than 100 characters';
+      }
+    }
+
+    // Quantity validation
+    if (!quantity) {
+      errors.quantity = 'Number of tickets is required';
+    } else if (!Number.isInteger(quantity) || quantity < 1) {
+      errors.quantity = 'Quantity must be at least 1';
+    } else if (quantity > 10) {
+      errors.quantity = 'You can book maximum 10 tickets at a time';
+    }
+
+    // If there are validation errors, return them
+    if (Object.keys(errors).length > 0) {
+      console.log('Validation errors:', errors);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
       });
+    }
 
-      await ticket.save({ session });
+    // 1. Find the event
+    console.log('Looking for event:', eventId);
+    const event = await Event.findById(eventId);
+    if (!event) {
+      console.log('Event not found:', eventId);
+      return res.status(404).json({ 
+        success: false,
+        message: 'Event not found',
+        error: 'The requested event could not be found.'
+      });
+    }
+    console.log('Event found:', event.title);
 
-      // 5. Create payment intent with Stripe
-      const paymentIntent = await stripe.paymentIntents.create({
+    // 2. Check if event is active
+    if (!event.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Event is not available',
+        error: 'This event is no longer available for booking.'
+      });
+    }
+
+    // 3. Check capacity if available
+    if (event.capacity) {
+      const ticketsSold = await Ticket.countDocuments({ 
+        event: eventId, 
+        status: { $in: ['reserved', 'confirmed'] } 
+      });
+      
+      const availableTickets = event.capacity - ticketsSold;
+      
+      if (quantity > availableTickets) {
+        return res.status(400).json({
+          success: false,
+          message: 'Insufficient tickets available',
+          error: `Only ${availableTickets} ticket${availableTickets !== 1 ? 's' : ''} available`,
+          availableTickets,
+          requestedTickets: quantity
+        });
+      }
+    }
+
+    // 4. Calculate ticket price
+    const costString = event.cost.replace(/[^0-9.]/g, '');
+    const unitPrice = Math.round(parseFloat(costString) * 100);
+    const totalAmount = unitPrice * quantity;
+    console.log('Price calculation:', { cost: event.cost, costString, unitPrice, totalAmount });
+
+    // 5. Create ticket reservation
+    console.log('Creating ticket reservation...');
+    const ticket = new Ticket({
+      event: eventId,
+      customer: {
+        name: customer.name.trim(),
+        email: customer.email.trim().toLowerCase(),
+        phone: customer.phone.trim(),
+        address: {
+          city: customer.city.trim(),
+          state: customer.state.trim(),
+          country: customer.country.trim()
+        }
+      },
+      quantity,
+      unitPrice,
+      totalAmount,
+      currency: 'usd',
+      status: 'reserved',
+      metadata
+    });
+
+    await ticket.save();
+    console.log('Ticket saved:', ticket._id);
+
+    // 6. Create payment intent with Stripe
+    console.log('Creating Stripe payment intent...');
+    
+    if (!stripe) {
+      console.log('Stripe not configured, creating mock payment intent');
+      // Create a mock payment intent for testing
+      const mockPaymentIntent = {
+        id: 'pi_mock_' + Date.now(),
+        client_secret: 'pi_mock_secret_' + Date.now(),
         amount: totalAmount,
-        currency: event.currency || 'usd',
-        metadata: {
-          ticketId: ticket._id.toString(),
-          eventId: event._id.toString(),
-          eventTitle: event.title
-        },
-        description: `${quantity} ticket(s) for ${event.title}`,
-        shipping: customer.address ? {
-          name: customer.name,
-          address: {
-            city: customer.city,
-            state: customer.state,
-            country: customer.country
-          }
-        } : undefined,
-        receipt_email: customer.email
-      });
+        currency: 'usd'
+      };
+      
+      // 7. Update ticket with payment intent ID
+      ticket.paymentIntentId = mockPaymentIntent.id;
+      await ticket.save();
+      console.log('Ticket updated with mock payment intent ID');
 
-      // 6. Update ticket with payment intent ID
-      ticket.paymentIntentId = paymentIntent.id;
-      await ticket.save({ session });
-
-      await session.commitTransaction();
-      session.endSession();
-
-      // 7. Return client secret for Stripe Elements
+      // 8. Return client secret for Stripe Elements
+      console.log('Sending success response with mock payment intent');
       res.status(201).json({
         success: true,
-        message: 'Ticket reservation created successfully',
+        message: 'Ticket reservation created successfully (Stripe not configured)',
         data: {
-          clientSecret: paymentIntent.client_secret,
+          clientSecret: mockPaymentIntent.client_secret,
           ticketId: ticket._id,
-          amount: paymentIntent.amount,
-          currency: paymentIntent.currency,
+          amount: mockPaymentIntent.amount,
+          currency: mockPaymentIntent.currency,
           event: {
             id: event._id,
             title: event.title,
@@ -194,62 +226,88 @@ router.post(
             email: customer.email
           },
           quantity,
-          totalAmount: paymentIntent.amount
+          totalAmount: mockPaymentIntent.amount
         }
       });
+      return;
+    }
 
-    } catch (err) {
-      await session.abortTransaction().catch(console.error);
-      session.endSession().catch(console.error);
-      
-      console.error('Error creating ticket:', err);
-      
-      // Handle Stripe specific errors
-      if (err.type === 'StripeCardError' || err.type === 'StripeError') {
-        return res.status(402).json({
-          success: false,
-          message: 'Payment processing failed',
-          error: err.message,
-          type: err.type,
-          code: err.code || null
-        });
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: totalAmount,
+      currency: 'usd',
+      metadata: {
+        ticketId: ticket._id.toString(),
+        eventId: event._id.toString(),
+        eventTitle: event.title
+      },
+      description: `${quantity} ticket(s) for ${event.title}`,
+      receipt_email: customer.email
+    });
+    console.log('Payment intent created:', paymentIntent.id);
+
+    // 7. Update ticket with payment intent ID
+    ticket.paymentIntentId = paymentIntent.id;
+    await ticket.save();
+    console.log('Ticket updated with payment intent ID');
+
+    // 8. Return client secret for Stripe Elements
+    console.log('Sending success response');
+    res.status(201).json({
+      success: true,
+      message: 'Ticket reservation created successfully',
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        ticketId: ticket._id,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        event: {
+          id: event._id,
+          title: event.title,
+          date: event.date,
+          time: event.time
+        },
+        customer: {
+          name: customer.name,
+          email: customer.email
+        },
+        quantity,
+        totalAmount: paymentIntent.amount
       }
+    });
+
+  } catch (err) {
+    console.error('Booking creation error:', err);
+    console.error('Error stack:', err.stack);
+    
+    // Handle specific error types
+    if (err.name === 'ValidationError') {
+      const validationErrors = {};
+      Object.keys(err.errors).forEach(key => {
+        validationErrors[key] = err.errors[key].message;
+      });
       
-      // Handle duplicate key errors
-      if (err.code === 11000) {
-        const field = Object.keys(err.keyPattern)[0];
-        return res.status(400).json({
-          success: false,
-          message: 'Duplicate entry',
-          error: `${field} already exists`,
-          field
-        });
-      }
-      
-      // Handle validation errors from Mongoose
-      if (err.name === 'ValidationError') {
-        const errors = {};
-        Object.keys(err.errors).forEach(key => {
-          errors[key] = err.errors[key].message;
-        });
-        
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors
-        });
-      }
-      
-      // Generic error handler
-      res.status(500).json({
+      return res.status(400).json({
         success: false,
-        message: 'Server error',
-        error: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred',
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+        message: 'Validation failed',
+        errors: validationErrors
       });
     }
+    
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate booking',
+        error: 'A booking with this information already exists'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create booking',
+      error: err.message || 'An error occurred while creating the booking'
+    });
   }
-);
+});
 
 // @route   GET /api/event-ticket-booking/:id
 // @desc    Get ticket by ID
@@ -265,7 +323,7 @@ router.get('/:id', auth, async (req, res) => {
       });
     }
 
-    const ticket = await EventTicketBooking.findById(req.params.id)
+    const ticket = await Ticket.findById(req.params.id)
       .populate('event', 'title date time place')
       .lean();
 
@@ -324,7 +382,7 @@ router.get('/event/:eventId', auth, async (req, res) => {
       return res.status(401).json({ msg: 'Not authorized' });
     }
 
-    const tickets = await EventTicketBooking.find({ event: req.params.eventId })
+    const tickets = await Ticket.find({ event: req.params.eventId })
       .sort({ createdAt: -1 })
       .populate('user', 'name email');
 
@@ -357,7 +415,7 @@ router.put(
         return res.status(401).json({ msg: 'Not authorized' });
       }
 
-      const ticket = await EventTicketBooking.findById(req.params.id);
+      const ticket = await Ticket.findById(req.params.id);
       if (!ticket) {
         return res.status(404).json({ msg: 'Ticket not found' });
       }
@@ -412,7 +470,7 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
 async function handlePaymentIntentSucceeded(paymentIntent) {
   try {
     // Update ticket status to confirmed
-    await EventTicketBooking.findOneAndUpdate(
+    await Ticket.findOneAndUpdate(
       { paymentIntentId: paymentIntent.id },
       { 
         status: 'confirmed',
@@ -433,7 +491,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 async function handlePaymentIntentFailed(paymentIntent) {
   try {
     // Update ticket status to failed
-    await EventTicketBooking.findOneAndUpdate(
+    await Ticket.findOneAndUpdate(
       { paymentIntentId: paymentIntent.id },
       { 
         status: 'cancelled',
