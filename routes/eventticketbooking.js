@@ -244,23 +244,51 @@ router.post('/', async (req, res) => {
       return;
     }
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalAmount,
-      currency: 'usd',
+    // Create a customer in Stripe
+    const stripeCustomer = await stripe.customers.create({
+      email: customer.email,
+      name: customer.name,
+      phone: customer.phone,
       metadata: {
         ticketId: ticket._id.toString(),
         eventId: event._id.toString(),
-        eventTitle: event.title
+        eventTitle: event.title,
+        quantity: quantity.toString()
+      }
+    });
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: totalAmount,
+      currency: 'usd',
+      customer: stripeCustomer.id,
+      metadata: {
+        ticketId: ticket._id.toString(),
+        eventId: event._id.toString(),
+        eventTitle: event.title,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        quantity: quantity.toString(),
+        unitPrice: unitPrice.toString(),
+        totalAmount: totalAmount.toString()
       },
       description: `${quantity} ticket(s) for ${event.title}`,
-      receipt_email: customer.email
+      receipt_email: customer.email,
+      shipping: {
+        name: customer.name,
+        address: {
+          city: customer.city,
+          state: customer.state,
+          country: customer.country
+        }
+      }
     });
     console.log('Payment intent created:', paymentIntent.id);
 
-    // 7. Update ticket with payment intent ID
+    // 7. Update ticket with payment intent ID and customer ID
     ticket.paymentIntentId = paymentIntent.id;
+    ticket.stripeCustomerId = stripeCustomer.id;
     await ticket.save();
-    console.log('Ticket updated with payment intent ID');
+    console.log('Ticket updated with payment intent ID and customer ID');
 
     // 8. Return client secret for Stripe Elements
     console.log('Sending success response');
@@ -555,8 +583,10 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
 // Helper function to handle successful payments
 async function handlePaymentIntentSucceeded(paymentIntent) {
   try {
+    console.log('Processing successful payment for intent:', paymentIntent.id);
+    
     // Update ticket status to confirmed
-    await Ticket.findOneAndUpdate(
+    const updatedTicket = await Ticket.findOneAndUpdate(
       { paymentIntentId: paymentIntent.id },
       { 
         status: 'confirmed',
@@ -565,6 +595,16 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
       },
       { new: true }
     );
+    
+    if (updatedTicket) {
+      console.log('Ticket updated successfully:', updatedTicket._id);
+      console.log('Payment Intent ID:', paymentIntent.id);
+      console.log('Amount:', paymentIntent.amount);
+      console.log('Currency:', paymentIntent.currency);
+      console.log('Customer:', paymentIntent.customer);
+    } else {
+      console.log('No ticket found for payment intent:', paymentIntent.id);
+    }
     
     // TODO: Send confirmation email to customer
   } catch (err) {

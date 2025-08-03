@@ -62,6 +62,10 @@ const ticketSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  stripeCustomerId: {
+    type: String,
+    required: false
+  },
   paymentMethod: {
     type: String,
     required: false
