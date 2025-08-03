@@ -26,6 +26,11 @@ const eventSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  ticketCost: {
+    type: Number,
+    required: false,
+    default: null
+  },
   capacity: {
     type: Number,
     required: false

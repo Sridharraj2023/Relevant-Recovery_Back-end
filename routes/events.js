@@ -91,6 +91,12 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
     }
 
+    // Extract ticket cost from cost string for paid events
+    let ticketCost = null;
+    if (cost && cost !== 'Free' && cost.startsWith('$')) {
+      ticketCost = parseFloat(cost.replace(/[^0-9.]/g, ''));
+    }
+
     // Save image locally if present
     let imageUrl = '';
     if (req.file) {
@@ -104,13 +110,13 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       time,
       place,
       cost,
+      ticketCost,
       capacity,
       desc,
       image: imageUrl,
       highlights: highlightsArr,
       specialGift,
       actionType,
-
     });
 
     const event = await newEvent.save();
@@ -155,6 +161,12 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
       try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
     }
 
+    // Extract ticket cost from cost string for paid events
+    let ticketCost = null;
+    if (cost && cost !== 'Free' && cost.startsWith('$')) {
+      ticketCost = parseFloat(cost.replace(/[^0-9.]/g, ''));
+    }
+
     // Save new image locally if present
     let imageUrl = event.image; // default to existing image
     if (req.file) {
@@ -169,11 +181,11 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
     event.desc = desc;
     event.actionType = actionType;
     event.cost = cost;
+    event.ticketCost = ticketCost;
     event.capacity = capacity;
     event.highlights = highlightsArr;
     event.specialGift = specialGift;
     event.image = imageUrl;
-
 
     await event.save();
     res.json(event);

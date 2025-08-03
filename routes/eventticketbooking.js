@@ -157,10 +157,22 @@ router.post('/', async (req, res) => {
     }
 
     // 4. Calculate ticket price
-    const costString = event.cost.replace(/[^0-9.]/g, '');
-    const unitPrice = Math.round(parseFloat(costString) * 100);
+    let unitPrice;
+    if (event.ticketCost) {
+      // Use the new ticketCost field if available
+      unitPrice = Math.round(event.ticketCost * 100);
+    } else {
+      // Fallback to parsing cost string for backward compatibility
+      const costString = event.cost.replace(/[^0-9.]/g, '');
+      unitPrice = Math.round(parseFloat(costString) * 100);
+    }
     const totalAmount = unitPrice * quantity;
-    console.log('Price calculation:', { cost: event.cost, costString, unitPrice, totalAmount });
+    console.log('Price calculation:', { 
+      cost: event.cost, 
+      ticketCost: event.ticketCost, 
+      unitPrice, 
+      totalAmount 
+    });
 
     // 5. Create ticket reservation
     console.log('Creating ticket reservation...');
