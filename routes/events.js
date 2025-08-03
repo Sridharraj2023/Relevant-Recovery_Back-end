@@ -48,6 +48,19 @@ router.get('/', async (req, res) => {
   }
 });
 
+// @route   GET /api/events/admin
+// @desc    Get all events for admin (including inactive)
+// @access  Private (Admin only)
+router.get('/admin', adminAuth, async (req, res) => {
+  try {
+    const events = await Event.find().sort({ createdAt: -1 });
+    res.json(events);
+  } catch (error) {
+    console.error('Get admin events error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/events/:id
 // @desc    Get single event by ID (public)
 // @access  Public
@@ -211,19 +224,6 @@ router.delete('/:id', adminAuth, async (req, res) => {
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
     console.error('Delete event error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/events/admin
-// @desc    Get all events for admin (including inactive)
-// @access  Private (Admin only)
-router.get('/admin', adminAuth, async (req, res) => {
-  try {
-    const events = await Event.find().sort({ createdAt: -1 });
-    res.json(events);
-  } catch (error) {
-    console.error('Get admin events error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
