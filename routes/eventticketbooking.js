@@ -321,13 +321,46 @@ router.post('/', async (req, res) => {
   }
 });
 
+// @route   GET /api/event-ticket-booking/event/:eventId
+// @desc    Get all tickets for an event (admin only)
+// @access  Private/Admin
+router.get('/event/:eventId', auth, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(401).json({ msg: 'Not authorized' });
+    }
+
+    const tickets = await Ticket.find({ event: req.params.eventId })
+      .sort({ createdAt: -1 })
+      .populate('user', 'name email');
+
+    res.json(tickets);
+  } catch (err) {
+    console.error('Get event tickets error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// @route   GET /api/event-ticket-booking/test
+// @desc    Test route to verify server is working
+// @access  Public
+router.get('/test', async (req, res) => {
+  res.json({ message: 'Event ticket booking route is working', timestamp: new Date().toISOString() });
+});
+
 // @route   GET /api/event-ticket-booking/:id
-// @desc    Get ticket by ID
-// @access  Private
-router.get('/:id', auth, async (req, res) => {
+// @desc    Get ticket by ID (public for confirmation, private for admin)
+// @access  Public
+router.get('/:id', async (req, res) => {
+  console.log('GET /api/event-ticket-booking/:id called with id:', req.params.id);
+  console.log('Request headers:', req.headers);
+  console.log('User:', req.user);
+  
   try {
     // Validate ID format
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.log('Invalid ID format:', req.params.id);
       return res.status(400).json({
         success: false,
         message: 'Invalid ticket ID format',
@@ -347,17 +380,19 @@ router.get('/:id', auth, async (req, res) => {
       });
     }
 
-    // Check if user is authorized to view this ticket
-    // Only allow the ticket owner or admin to view the ticket
-    const isOwner = ticket.user && ticket.user.toString() === req.user.id;
-    const isAdmin = req.user.role === 'admin';
-    
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied',
-        error: 'You are not authorized to view this ticket.'
-      });
+    // For public access, allow viewing any ticket by ID
+    // For admin access (if authenticated), allow full access
+    if (req.user) {
+      const isOwner = ticket.user && ticket.user.toString() === req.user.id;
+      const isAdmin = req.user.role === 'admin';
+      
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied',
+          error: 'You are not authorized to view this ticket.'
+        });
+      }
     }
 
     res.status(200).json({
@@ -367,6 +402,8 @@ router.get('/:id', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('Get ticket error:', err);
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
     
     if (err.name === 'CastError') {
       return res.status(400).json({
@@ -381,27 +418,6 @@ router.get('/:id', auth, async (req, res) => {
       message: 'Server error',
       error: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred while retrieving the ticket.'
     });
-  }
-});
-
-// @route   GET /api/event-ticket-booking/event/:eventId
-// @desc    Get all tickets for an event (admin only)
-// @access  Private/Admin
-router.get('/event/:eventId', auth, async (req, res) => {
-  try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(401).json({ msg: 'Not authorized' });
-    }
-
-    const tickets = await Ticket.find({ event: req.params.eventId })
-      .sort({ createdAt: -1 })
-      .populate('user', 'name email');
-
-    res.json(tickets);
-  } catch (err) {
-    console.error('Get event tickets error:', err);
-    res.status(500).json({ msg: 'Server error' });
   }
 });
 
