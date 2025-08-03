@@ -459,10 +459,60 @@ router.put(
   }
 );
 
+// @route   POST /api/event-ticket-booking/confirm-payment
+// @desc    Confirm payment and update ticket status
+// @access  Public
+router.post('/confirm-payment', async (req, res) => {
+  try {
+    const { paymentIntentId, ticketId } = req.body;
+    
+    if (!paymentIntentId || !ticketId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment intent ID and ticket ID are required'
+      });
+    }
+
+    // Verify the payment intent with Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    
+    if (paymentIntent.status === 'succeeded') {
+      // Update ticket status
+      await Ticket.findByIdAndUpdate(ticketId, {
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        paymentMethod: paymentIntent.payment_method_types?.[0] || 'card'
+      });
+      
+      res.json({
+        success: true,
+        message: 'Payment confirmed successfully'
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: `Payment not succeeded. Status: ${paymentIntent.status}`
+      });
+    }
+  } catch (err) {
+    console.error('Confirm payment error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to confirm payment'
+    });
+  }
+});
+
 // Webhook handler for Stripe events
 router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
+
+  console.log('Webhook received:', {
+    signature: sig ? 'Present' : 'Missing',
+    bodyLength: req.body.length,
+    headers: req.headers
+  });
 
   try {
     event = stripe.webhooks.constructEvent(
@@ -470,6 +520,12 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
+    
+    console.log('Webhook event parsed:', {
+      type: event.type,
+      id: event.id,
+      created: event.created
+    });
   } catch (err) {
     console.error(`Webhook Error: ${err.message}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -478,10 +534,12 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
   // Handle the event
   switch (event.type) {
     case 'payment_intent.succeeded':
+      console.log('Processing payment_intent.succeeded');
       const paymentIntent = event.data.object;
       await handlePaymentIntentSucceeded(paymentIntent);
       break;
     case 'payment_intent.payment_failed':
+      console.log('Processing payment_intent.payment_failed');
       const failedPaymentIntent = event.data.object;
       await handlePaymentIntentFailed(failedPaymentIntent);
       break;
