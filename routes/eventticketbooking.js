@@ -370,6 +370,22 @@ router.get('/event/:eventId', auth, async (req, res) => {
   }
 });
 
+// @route   GET /api/event-ticket-booking
+// @desc    Get all ticket bookings (admin only)
+// @access  Private/Admin
+router.get('/', adminAuth, async (req, res) => {
+  try {
+    const tickets = await Ticket.find({})
+      .populate('event', 'title date time place')
+      .sort({ createdAt: -1 });
+
+    res.json(tickets);
+  } catch (err) {
+    console.error('Get all tickets error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 // @route   GET /api/event-ticket-booking/test
 // @desc    Test route to verify server is working
 // @access  Public
