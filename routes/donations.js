@@ -12,6 +12,48 @@ if (process.env.STRIPE_API_BASE_URL) {
 }
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, stripeOptions);
 
+// GET /api/donations - Get all donations (for admin)
+router.get('/', async (req, res) => {
+  try {
+    const donations = await Donation.find({})
+      .sort({ createdAt: -1 })
+      .select('-__v');
+    
+    res.status(200).json(donations);
+  } catch (err) {
+    console.error('Error fetching donations:', err);
+    res.status(500).json({ error: 'Failed to fetch donations' });
+  }
+});
+
+// GET /api/donations/:id - Get specific donation
+router.get('/:id', async (req, res) => {
+  try {
+    const donation = await Donation.findById(req.params.id);
+    if (!donation) {
+      return res.status(404).json({ error: 'Donation not found' });
+    }
+    res.status(200).json(donation);
+  } catch (err) {
+    console.error('Error fetching donation:', err);
+    res.status(500).json({ error: 'Failed to fetch donation' });
+  }
+});
+
+// DELETE /api/donations/:id - Delete donation
+router.delete('/:id', async (req, res) => {
+  try {
+    const donation = await Donation.findByIdAndDelete(req.params.id);
+    if (!donation) {
+      return res.status(404).json({ error: 'Donation not found' });
+    }
+    res.status(200).json({ message: 'Donation deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting donation:', err);
+    res.status(500).json({ error: 'Failed to delete donation' });
+  }
+});
+
 // POST /api/donations
 router.post('/', async (req, res) => {
   try {
