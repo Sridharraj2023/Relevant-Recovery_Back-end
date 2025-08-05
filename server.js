@@ -4,17 +4,9 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDb = require('./config/db');
-const path = require('path');
-const fs = require('fs');
 const donations = require('./routes/donations');
 const eventTicketBooking = require('./routes/eventticketbooking');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-// Ensure uploads/events directory exists
-const uploadDir = path.join(__dirname, 'uploads/events');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
 
 const app = express();
 
@@ -22,7 +14,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads/events', express.static(path.join(__dirname, 'uploads/events')));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

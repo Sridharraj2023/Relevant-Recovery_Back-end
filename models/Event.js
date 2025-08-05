@@ -40,11 +40,6 @@ const eventSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  image: {
-    type: String, // filename only
-    required: false,
-    trim: true
-  },
   highlights: {
     type: [String],
     required: false

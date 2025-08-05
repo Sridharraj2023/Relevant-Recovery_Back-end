@@ -2,36 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Event = require('../models/Event');
 const { adminAuth } = require('../middleware/auth');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const uploadDir = path.join(__dirname, '../uploads/events');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-const cloudinary = require('cloudinary').v2;
-const streamifier = require('streamifier');
 
-// Cloudinary config (use environment variables for credentials)
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-// Multer config for disk storage (save to uploads/events)
-const multerStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const eventName = req.body.title ? req.body.title.replace(/[^a-zA-Z0-9_-]/g, '_') : 'event';
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `${eventName}_${timestamp}${ext}`);
-  }
-});
-const upload = multer({ storage: multerStorage });
 
 const router = express.Router();
 
@@ -83,7 +54,7 @@ router.get('/:id', async (req, res) => {
 // @route   POST /api/events
 // @desc    Create new event
 // @access  Private (Admin only)
-router.post('/', adminAuth, upload.single('image'), async (req, res) => {
+router.post('/', adminAuth, async (req, res) => {
   try {
     const {
       date,
@@ -98,7 +69,7 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       actionType
     } = req.body;
 
-    // Highlights may come as a JSON string from form-data
+    // Highlights may come as a JSON string
     let highlightsArr = highlights;
     if (typeof highlights === 'string') {
       try { highlightsArr = JSON.parse(highlights); } catch { highlightsArr = [highlights]; }
@@ -110,13 +81,6 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       ticketCost = parseFloat(cost.replace(/[^0-9.]/g, ''));
     }
 
-    // Save image locally if present
-    let imageUrl = '';
-    if (req.file) {
-      const baseUrl = 'https://' + req.get('host');
-      imageUrl = `${baseUrl}/uploads/events/${req.file.filename}`;
-    }
-
     const newEvent = new Event({
       date,
       title,
@@ -126,7 +90,6 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
       ticketCost,
       capacity,
       desc,
-      image: imageUrl,
       highlights: highlightsArr,
       specialGift,
       actionType,
@@ -143,7 +106,7 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
 // @route   PUT /api/events/:id
 // @desc    Update event
 // @access  Private (Admin only)
-router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
+router.put('/:id', adminAuth, async (req, res) => {
   try {
     const {
       date,
@@ -180,13 +143,6 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
       ticketCost = parseFloat(cost.replace(/[^0-9.]/g, ''));
     }
 
-    // Save new image locally if present
-    let imageUrl = event.image; // default to existing image
-    if (req.file) {
-      const baseUrl = 'https://' + req.get('host');
-      imageUrl = `${baseUrl}/uploads/events/${req.file.filename}`;
-    }
-
     event.date = date;
     event.title = title;
     event.time = time;
@@ -198,7 +154,6 @@ router.put('/:id', adminAuth, upload.single('image'), async (req, res) => {
     event.capacity = capacity;
     event.highlights = highlightsArr;
     event.specialGift = specialGift;
-    event.image = imageUrl;
 
     await event.save();
     res.json(event);
