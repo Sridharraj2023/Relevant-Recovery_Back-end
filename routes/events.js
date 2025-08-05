@@ -69,6 +69,11 @@ router.post('/', adminAuth, async (req, res) => {
       actionType
     } = req.body;
 
+    // Validation (manual, since express-validator is not used here)
+    if (!date || !title || !time || !place || !desc || !actionType || !cost) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
     // Highlights may come as a JSON string
     let highlightsArr = highlights;
     if (typeof highlights === 'string') {
@@ -122,7 +127,7 @@ router.put('/:id', adminAuth, async (req, res) => {
     } = req.body;
 
     // Validation (manual, since express-validator is not used here)
-    if (!date || !title || !time || !place || !desc || !actionType) {
+    if (!date || !title || !time || !place || !desc || !actionType || !cost) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
